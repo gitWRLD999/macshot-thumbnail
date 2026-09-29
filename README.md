@@ -27,6 +27,28 @@ Settings persist in `%LOCALAPPDATA%\MacShotThumbnail\settings.json`. Recoverable
 
 This is an **early release**, developed and tested on one Windows 11 computer. It is not affiliated with Apple or Microsoft.
 
+## Screenshots
+
+Actual app controls captured with sample content and a generic folder path. No personal desktop or account information is included.
+
+### Floating Thumbnail
+
+Hover controls: trash, crop, and dismiss. The preview remains available briefly after dragging.
+
+![Screenshot thumbnail with trash, crop, and dismiss controls](docs/screenshots/thumbnail.png)
+
+### Crop a Screenshot
+
+Select a rectangle, then confirm with Crop. Cancel keeps the original.
+
+![Crop editor showing a selected portion of a sample screenshot](docs/screenshots/crop.png)
+
+### Settings and Shortcuts
+
+Configure preview behavior and separate shortcuts for area and full-screen capture.
+
+![MacShot settings showing display options and capture shortcuts](docs/screenshots/settings.png)
+
 ## Download and Run
 
 Download the Windows x64 ZIP from [Releases](https://github.com/gitWRLD999/macshot-thumbnail/releases), extract it, and run `MacShotThumbnail.exe`. The download includes the .NET runtime; you do not need to install .NET separately.

@@ -4,10 +4,15 @@ using System.Linq.Expressions;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
+        if (args.Length == 2 && args[0] == "--screenshots")
+        {
+            ScreenshotDocumentation.Generate(args[1]);
+            return;
+        }
         string path = Path.Combine(Path.GetTempPath(), "MacShot-recycle-test-" + Guid.NewGuid() + ".png");
         using (var bitmap = new Bitmap(300, 180))
         {
