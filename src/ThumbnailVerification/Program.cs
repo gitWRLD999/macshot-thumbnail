@@ -27,6 +27,23 @@ internal static class Program
         if (form.Right != area.Right - 16 || form.Bottom != area.Bottom - 16)
             throw new Exception("Thumbnail is not at bottom right.");
         Console.WriteLine("PASS: Thumbnail is positioned at bottom right.");
+        type.GetMethod("ResumeAfterDrag")!.Invoke(form, null);
+        var expiry = (DateTime)type.GetField("expiresAt", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(form)!;
+        if (form.IsDisposed || expiry < DateTime.UtcNow.AddSeconds(7)) throw new Exception("Missing post-drag grace period.");
+        if (!form.Controls.OfType<Button>().Any(b => b.AccessibleName == "Crop screenshot")) throw new Exception("Missing crop button.");
+        Console.WriteLine("PASS: Post-drag grace period and crop control.");
+        var cropType = type.Assembly.GetType("MacShotThumbnail.CropForm", true)!;
+        using (var input = new Bitmap(400, 200))
+        using (var crop = (Form)Activator.CreateInstance(cropType, input)!)
+        {
+            crop.Show(); Application.DoEvents();
+            var view = (Rectangle)cropType.GetMethod("ImageBounds", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(crop, null)!;
+            cropType.GetField("selection", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(crop, new Rectangle(view.Left, view.Top, view.Width / 2, view.Height / 2));
+            using var result = (Bitmap)cropType.GetMethod("CreateCrop")!.Invoke(crop, null)!;
+            if (Math.Abs(result.Width - 200) > 1 || Math.Abs(result.Height - 100) > 1) throw new Exception("Crop coordinate mapping failed.");
+            crop.Close();
+        }
+        Console.WriteLine("PASS: Crop maps zoomed image selection to original pixels.");
         var settingsType = type.Assembly.GetType("MacShotThumbnail.Settings", true)!;
         var settings = Activator.CreateInstance(settingsType)!;
         settingsType.GetProperty("Seconds")!.SetValue(settings, 0);

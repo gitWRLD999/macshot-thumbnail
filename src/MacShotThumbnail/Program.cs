@@ -36,7 +36,7 @@ internal sealed class ScreenshotApp : ApplicationContext
     private SettingsForm? settingsForm;
     private readonly System.Windows.Forms.Timer settingsTimer;
     private bool capturing;
-    private bool printScreenDown;
+    private readonly HashSet<Keys> heldShortcuts = [];
     private long lastPrintScreen;
 
     private delegate IntPtr KeyboardHookProc(int code, IntPtr message, IntPtr data);
@@ -77,6 +77,7 @@ internal sealed class ScreenshotApp : ApplicationContext
         hotkeys = new HotkeyWindow(id =>
         {
             if (id == PrintScreenHotkey && settings.Enabled) RunCapture(CaptureRegion);
+            if (id == 4 && settings.Enabled) RunCapture(CaptureFullScreen);
         });
         _ = hotkeys.Handle;
 
@@ -85,12 +86,12 @@ internal sealed class ScreenshotApp : ApplicationContext
 
         var menu = new ContextMenuStrip();
         var enabled = new ToolStripMenuItem("Enabled") { Checked = settings.Enabled, CheckOnClick = true };
-        enabled.Click += (_, _) => { settings.Enabled = enabled.Checked; printScreenDown = false; settings.Save(); ClosePreviews(); };
+        enabled.Click += (_, _) => { settings.Enabled = enabled.Checked; settings.Save(); ClosePreviews(); };
         menu.Items.Add(enabled);
         menu.Opening += (_, _) => enabled.Checked = settings.Enabled;
         menu.Items.Add("Settings...", null, (_, _) => OpenSettings());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Capture area   Print Screen", null, (_, _) => RunCapture(CaptureRegion));
+        menu.Items.Add("Capture area", null, (_, _) => RunCapture(CaptureRegion));
         menu.Items.Add("Capture screen", null, (_, _) => RunCapture(CaptureFullScreen));
         menu.Items.Add("Open Screenshots", null, (_, _) => RunCapture(() => {
             Directory.CreateDirectory(settings.Folder);
@@ -121,7 +122,7 @@ internal sealed class ScreenshotApp : ApplicationContext
     private void OpenSettings()
     {
         if (settingsForm is { IsDisposed: false }) { ShowWindow(settingsForm.Handle, 9); settingsForm.Activate(); return; }
-        settingsForm = new SettingsForm(settings, value => { settings = value; printScreenDown = false; ClosePreviews(); });
+        settingsForm = new SettingsForm(settings, value => { settings = value; ClosePreviews(); });
         settingsForm.Show();
         // Override a hidden startup show state when settings are explicitly requested.
         ShowWindow(settingsForm.Handle, 5);
@@ -148,25 +149,26 @@ internal sealed class ScreenshotApp : ApplicationContext
 
     private IntPtr HandleKeyboard(int code, IntPtr message, IntPtr data)
     {
-        if (settings.Enabled && code >= 0 && Marshal.PtrToStructure<KeyboardEvent>(data).VirtualKey == PrintScreenKey)
+        if (code >= 0)
         {
-            bool modified = (GetAsyncKeyState(0x10) & 0x8000) != 0 ||
-                (GetAsyncKeyState(0x11) & 0x8000) != 0 ||
-                (GetAsyncKeyState(0x12) & 0x8000) != 0 ||
-                (GetAsyncKeyState(0x5B) & 0x8000) != 0 ||
-                (GetAsyncKeyState(0x5C) & 0x8000) != 0;
-            if (!modified)
+            Keys key = (Keys)Marshal.PtrToStructure<KeyboardEvent>(data).VirtualKey;
+            int kind = message.ToInt32();
+            if (kind is 0x0101 or 0x0105 && heldShortcuts.Remove(key)) return (IntPtr)1;
+            Keys combination = key;
+            if ((GetAsyncKeyState(0x10) & 0x8000) != 0) combination |= Keys.Shift;
+            if ((GetAsyncKeyState(0x11) & 0x8000) != 0) combination |= Keys.Control;
+            if ((GetAsyncKeyState(0x12) & 0x8000) != 0) combination |= Keys.Alt;
+            bool windows = (GetAsyncKeyState(0x5B) & 0x8000) != 0 || (GetAsyncKeyState(0x5C) & 0x8000) != 0;
+            if (settings.Enabled && !windows && settingsForm?.ContainsFocus != true && !capturing &&
+                (combination == settings.AreaShortcut || combination == settings.FullShortcut))
             {
-                int kind = message.ToInt32();
                 if (kind is 0x0100 or 0x0104)
                 {
-                    if (!printScreenDown) QueuePrintScreen();
-                    printScreenDown = true;
+                    if (heldShortcuts.Add(key)) QueuePrintScreen(combination == settings.AreaShortcut ? 3 : 4);
                 }
                 else if (kind is 0x0101 or 0x0105)
                 {
-                    if (!printScreenDown) QueuePrintScreen();
-                    printScreenDown = false;
+                    if (key == Keys.PrintScreen) QueuePrintScreen(combination == settings.AreaShortcut ? 3 : 4);
                 }
                 return (IntPtr)1;
             }
@@ -174,12 +176,12 @@ internal sealed class ScreenshotApp : ApplicationContext
         return CallNextHookEx(keyboardHook, code, message, data);
     }
 
-    private void QueuePrintScreen()
+    private void QueuePrintScreen(int action)
     {
         long now = Environment.TickCount64;
         if (now - lastPrintScreen < 400) return;
         lastPrintScreen = now;
-        PostMessage(hotkeys.Handle, PrintScreenMessage, IntPtr.Zero, IntPtr.Zero);
+        PostMessage(hotkeys.Handle, PrintScreenMessage, (IntPtr)action, IntPtr.Zero);
     }
 
     private static Bitmap Capture(Rectangle bounds)
@@ -225,10 +227,45 @@ internal sealed class ScreenshotApp : ApplicationContext
         if (settings.CopyToClipboard)
             try { Clipboard.SetDataObject(image, true, 5, 100); } catch (ExternalException error) { Settings.Log(error); }
 
+        ShowPath(path);
+    }
+
+    private void CropScreenshot(string path)
+    {
+        RunCapture(() =>
+        {
+            foreach (var preview in thumbnails.ToArray()) { preview.Pause(); preview.Hide(); }
+            try
+            {
+                using var original = new Bitmap(path);
+                using var image = new Bitmap(original);
+                original.Dispose();
+                using var editor = new CropForm(image);
+                if (editor.ShowDialog() != DialogResult.OK) return;
+                using var cropped = editor.CreateCrop();
+                string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
+                {
+                    cropped.Save(temporary, System.Drawing.Imaging.ImageFormat.Png);
+                    File.Move(temporary, path, true);
+                }
+                finally { if (File.Exists(temporary)) File.Delete(temporary); }
+                if (settings.CopyToClipboard)
+                    try { Clipboard.SetDataObject(cropped, true, 5, 100); } catch (ExternalException error) { Settings.Log(error); }
+                ClosePreviews();
+                ShowPath(path);
+            }
+            finally { foreach (var preview in thumbnails.ToArray()) { preview.Show(); preview.ResumeAfterDrag(); } }
+        });
+    }
+
+    private void ShowPath(string path)
+    {
         var displays = settings.AllDisplays ? Screen.AllScreens : [Screen.FromPoint(Cursor.Position)];
         foreach (var display in displays)
         {
             var thumbnail = new ThumbnailForm(path, form => thumbnails.Remove(form), display.WorkingArea, settings, ClosePreviews);
+            thumbnail.CropRequested = () => CropScreenshot(path);
             thumbnails.Add(thumbnail);
             thumbnail.Show();
         }
@@ -254,7 +291,7 @@ internal sealed class ScreenshotApp : ApplicationContext
 
         protected override void WndProc(ref Message message)
         {
-            if (message.Msg == PrintScreenMessage) onHotkey(PrintScreenHotkey);
+            if (message.Msg == PrintScreenMessage) onHotkey(message.WParam.ToInt32());
             base.WndProc(ref message);
         }
 
@@ -363,6 +400,18 @@ internal sealed class ThumbnailForm : Form
     private DateTime expiresAt;
     private Point dragOrigin;
     private bool dragging;
+    private bool suppressClick;
+    private readonly int lifetime;
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Action? CropRequested { get; set; }
+    public void Pause() => timer.Stop();
+    public void ResumeAfterDrag()
+    {
+        if (IsDisposed) return;
+        expiresAt = DateTime.UtcNow.AddSeconds(Math.Max(8, lifetime));
+        Opacity = 1;
+        timer.Start();
+    }
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hWnd, int attribute, ref int value, int size);
@@ -373,6 +422,7 @@ internal sealed class ThumbnailForm : Form
     public ThumbnailForm(string path, Action<ThumbnailForm> onClose, Rectangle area, Settings settings, Action? closeAll)
     {
         this.closeAll = closeAll;
+        lifetime = settings.Seconds;
         this.path = path;
         this.onClose = onClose;
         Text = "Screenshot thumbnail";
@@ -426,10 +476,21 @@ internal sealed class ThumbnailForm : Form
         Controls.Add(trashButton);
         trashButton.BringToFront();
 
+        var cropButton = new Button
+        {
+            Text = "\uE7A8", Font = new Font("Segoe Fluent Icons", 11), AccessibleName = "Crop screenshot",
+            Width = 26, Height = 26, Left = 35, Top = 5, FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(24, 24, 24), ForeColor = Color.White, Visible = false, TabStop = false
+        };
+        cropButton.FlatAppearance.BorderSize = 0;
+        toolTip.SetToolTip(cropButton, "Crop screenshot");
+        cropButton.Click += (_, _) => CropRequested?.Invoke();
+        Controls.Add(cropButton); cropButton.BringToFront();
+
         imageBox.MouseDown += (_, e) =>
         {
             if (e.Button == MouseButtons.Right) Close();
-            if (e.Button == MouseButtons.Left) dragOrigin = e.Location;
+            if (e.Button == MouseButtons.Left) { dragOrigin = e.Location; suppressClick = false; }
         };
         imageBox.MouseMove += (_, e) =>
         {
@@ -438,19 +499,19 @@ internal sealed class ThumbnailForm : Form
             if (Math.Abs(e.X - dragOrigin.X) < threshold.Width / 2 &&
                 Math.Abs(e.Y - dragOrigin.Y) < threshold.Height / 2) return;
             dragging = true;
+            suppressClick = true;
             timer?.Stop();
             var data = new DataObject();
             data.SetData(DataFormats.FileDrop, new[] { path });
             data.SetData(DataFormats.Bitmap, imageBox.Image!);
             try
             {
-                var result = DoDragDrop(data, DragDropEffects.Copy | DragDropEffects.Move);
-                if (result != DragDropEffects.None) { if (closeAll != null) closeAll(); else Close(); }
+                DoDragDrop(data, DragDropEffects.Copy | DragDropEffects.Move);
             }
             catch (Exception error) { Settings.Log(error); }
-            finally { dragging = false; if (!IsDisposed) timer?.Start(); }
+            finally { dragging = false; ResumeAfterDrag(); }
         };
-        imageBox.Click += (_, _) => { if (!dragging) Close(); };
+        imageBox.Click += (_, _) => { if (!dragging && !suppressClick) Close(); };
 
         expiresAt = DateTime.UtcNow.AddSeconds(settings.Seconds);
         timer = new System.Windows.Forms.Timer { Interval = 100 };
@@ -460,6 +521,7 @@ internal sealed class ThumbnailForm : Form
             if (!File.Exists(path)) { Close(); return; }
             closeButton.Visible = hovering;
             trashButton.Visible = hovering;
+            cropButton.Visible = hovering;
             if (hovering)
             {
                 expiresAt = DateTime.UtcNow.AddSeconds(settings.Seconds);

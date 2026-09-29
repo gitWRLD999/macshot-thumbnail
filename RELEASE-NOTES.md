@@ -1,4 +1,9 @@
-MacShot Thumbnail v0.2.0 for Windows 11 x64.
+MacShot Thumbnail v0.3.0 for Windows 11 x64.
+
+- Keep the dragged preview available for at least eight seconds afterward, including access to Trash.
+- Crop saved screenshots from a thumbnail button; update mirrored previews and clipboard after confirmation.
+- Separate configurable area and full-screen shortcuts, defaulting to Print Screen and Ctrl+Print Screen.
+- Verified crop coordinate conversion, post-drag lifetime, shortcut recording UI, and recycling on two connected displays. Broad receiving-app drag-and-drop compatibility remains unverified.
 
 - Mirrored screenshot previews on every display by default, with coordinated recycling.
 - Settings window: enabled switch, startup, display scope, corner, size, timeout, clipboard, and output folder.

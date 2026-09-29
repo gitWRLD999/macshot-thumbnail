@@ -19,7 +19,9 @@ Open **MacShot Settings** from the Windows Start menu, or double-click the MacSh
 - **Quit** in the tray menu fully exits the app. Launch MacShot Settings to start it again.
 - **Start with Windows** controls sign-in startup independently of Enabled.
 - Settings include every display versus the pointer's display, four corners, preview width, auto-dismiss duration (zero means never), clipboard copying, and the screenshot folder. Click Save to apply.
-- Dismissing a preview keeps the file. Trashing or successfully dragging it closes all mirrored previews. A cancelled drag keeps the preview available.
+- Dismissing a preview keeps the file. Trashing closes all mirrored previews. After dragging, the source preview remains for at least eight seconds so you can trash it. If the receiving app moves or deletes the original file, its preview closes.
+- Hover and click the crop icon, select a rectangle, then click Crop. This replaces the saved PNG and refreshes previews and the clipboard; Cancel leaves it unchanged.
+- Area capture defaults to Print Screen; full-screen capture (the display under the pointer) defaults to Ctrl+Print Screen. Click either shortcut field and press a new combination, then Save. Supported keys: Print Screen or F1-F24 with optional modifiers, or Ctrl/Alt plus a letter (Shift is optional). Windows-key combinations are not supported. Avoid shortcuts already used by another app.
 
 Settings persist in `%LOCALAPPDATA%\MacShotThumbnail\settings.json`. Recoverable capture errors are reported through a tray notification; diagnostic logs are size-limited in that same folder. Invalid settings fall back to defaults. Screenshots are never uploaded.
 
@@ -43,7 +45,7 @@ Running the EXE directly is portable and does not enable startup. Only one insta
 
 ## Behavior and Limits
 
-The app listens for plain Print Screen through a Windows keyboard hook. Modified combinations such as Alt+Print Screen pass through. It does not record or store keystrokes. Quit from the tray to release the key.
+The app listens for your two configured shortcuts through a Windows keyboard hook. Other combinations pass through. It does not record or store keystrokes. Disable it or quit from the tray to release the shortcuts. Shortcuts are suspended while settings or a capture editor has focus.
 
 Dismissal keeps the saved screenshot. The trash-can button sends it to the Recycle Bin. If your Pictures folder is redirected to OneDrive, Windows/OneDrive may sync the saved files according to your existing settings.
 

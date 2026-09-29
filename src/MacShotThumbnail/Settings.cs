@@ -10,6 +10,8 @@ internal sealed class Settings
     public bool CopyToClipboard { get; set; } = true;
     public int Width { get; set; } = 260;
     public int Seconds { get; set; } = 8;
+    public Keys AreaShortcut { get; set; } = Keys.PrintScreen;
+    public Keys FullShortcut { get; set; } = Keys.Control | Keys.PrintScreen;
     public string Corner { get; set; } = "Bottom right";
     public string Folder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Screenshots");
     internal static readonly string DirectoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MacShotThumbnail");
@@ -21,6 +23,9 @@ internal sealed class Settings
             var value = File.Exists(FilePath) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new() : new Settings();
             value.Width = Math.Clamp(value.Width, 160, 480);
             value.Seconds = Math.Clamp(value.Seconds, 0, 60);
+            if (!ShortcutRules.Valid(value.AreaShortcut)) value.AreaShortcut = Keys.PrintScreen;
+            if (!ShortcutRules.Valid(value.FullShortcut) || value.FullShortcut == value.AreaShortcut)
+                value.FullShortcut = value.AreaShortcut == (Keys.Control | Keys.PrintScreen) ? Keys.Alt | Keys.PrintScreen : Keys.Control | Keys.PrintScreen;
             if (!Corners.Contains(value.Corner)) value.Corner = Corners[0];
             if (string.IsNullOrWhiteSpace(value.Folder)) value.Folder = new Settings().Folder;
             return value;
@@ -83,6 +88,20 @@ internal sealed class SettingsForm : Form
         var width = new NumericUpDown { Minimum = 160, Maximum = 480, Increment = 20, Value = current.Width, Dock = DockStyle.Fill };
         var seconds = new NumericUpDown { Minimum = 0, Maximum = 60, Value = current.Seconds, Dock = DockStyle.Fill };
         var folder = new TextBox { Text = current.Folder, Dock = DockStyle.Fill };
+        TextBox Shortcut(Keys value)
+        {
+            var box = new TextBox { ReadOnly = true, Tag = value, Text = new KeysConverter().ConvertToString(value), Dock = DockStyle.Fill };
+            box.KeyDown += (_, e) =>
+            {
+                e.SuppressKeyPress = true;
+                if (!ShortcutRules.Valid(e.KeyData)) return;
+                box.Tag = e.KeyData;
+                box.Text = new KeysConverter().ConvertToString(e.KeyData);
+            };
+            return box;
+        }
+        var areaShortcut = Shortcut(current.AreaShortcut);
+        var fullShortcut = Shortcut(current.FullShortcut);
         void Row(int row, string label, Control control)
         {
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
@@ -90,7 +109,7 @@ internal sealed class SettingsForm : Form
             control.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             grid.Controls.Add(control, 1, row);
         }
-        Row(0, "Print Screen shortcut", enabled);
+        Row(0, "Screenshot shortcuts", enabled);
         Row(1, "Startup", startup);
         Row(2, "Displays", displays);
         Row(3, "Clipboard", clipboard);
@@ -98,8 +117,12 @@ internal sealed class SettingsForm : Form
         Row(5, "Preview width (pixels)", width);
         Row(6, "Dismiss seconds (0 = never)", seconds);
         Row(7, "Screenshot folder", folder);
+        Row(8, "Area capture shortcut", areaShortcut);
+        Row(9, "Full-screen shortcut", fullShortcut);
+        ClientSize = new Size(550, 510);
+        grid.RowCount = 11;
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        grid.Controls.Add(actions, 0, 8); grid.SetColumnSpan(actions, 2);
+        grid.Controls.Add(actions, 0, 10); grid.SetColumnSpan(actions, 2);
         var save = new Button { Text = "Save", AutoSize = true };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
         var browse = new Button { Text = "Browse folder", AutoSize = true };
@@ -110,8 +133,11 @@ internal sealed class SettingsForm : Form
             try
             {
                 string destination = Path.GetFullPath(folder.Text.Trim());
+                if (Equals(areaShortcut.Tag, fullShortcut.Tag)) throw new InvalidOperationException("Choose different shortcuts for area and full-screen capture.");
                 Directory.CreateDirectory(destination);
                 var next = new Settings { Enabled = enabled.Checked, AllDisplays = displays.Checked, CopyToClipboard = clipboard.Checked, Width = (int)width.Value, Seconds = (int)seconds.Value, Corner = (string)corner.SelectedItem!, Folder = destination };
+                next.AreaShortcut = (Keys)areaShortcut.Tag!;
+                next.FullShortcut = (Keys)fullShortcut.Tag!;
                 Settings.StartupEnabled = startup.Checked;
                 next.Save(); apply(next); Close();
             }
