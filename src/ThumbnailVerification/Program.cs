@@ -27,10 +27,36 @@ internal static class Program
         if (form.Right != area.Right - 16 || form.Bottom != area.Bottom - 16)
             throw new Exception("Thumbnail is not at bottom right.");
         Console.WriteLine("PASS: Thumbnail is positioned at bottom right.");
+        var settingsType = type.Assembly.GetType("MacShotThumbnail.Settings", true)!;
+        var settings = Activator.CreateInstance(settingsType)!;
+        settingsType.GetProperty("Seconds")!.SetValue(settings, 0);
+        var mirrors = new List<Form>();
+        Action closeAll = () => { foreach (var mirror in mirrors.ToArray()) mirror.Close(); };
+        foreach (var display in Screen.AllScreens)
+        {
+            var mirror = (Form)Activator.CreateInstance(type, path, callback, display.WorkingArea, settings, closeAll)!;
+            mirrors.Add(mirror); mirror.Show(); Application.DoEvents();
+            if (mirror.Right != display.WorkingArea.Right - 16 || mirror.Bottom != display.WorkingArea.Bottom - 16)
+                throw new Exception("Incorrect display placement: " + display.DeviceName);
+        }
+        using (var exclusive = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
+        Console.WriteLine($"PASS: {mirrors.Count} simultaneous display previews, no file locks.");
+        foreach (string corner in new[] { "Bottom left", "Top left", "Top right" })
+        {
+            settingsType.GetProperty("Corner")!.SetValue(settings, corner);
+            var bounds = new Rectangle(-1920, -1080, 1920, 1080);
+            using var preview = (Form)Activator.CreateInstance(type, path, callback, bounds, settings, null)!;
+            if ((corner.EndsWith("left") ? preview.Left != bounds.Left + 16 : preview.Right != bounds.Right - 16) ||
+                (corner.StartsWith("Top") ? preview.Top != bounds.Top + 16 : preview.Bottom != bounds.Bottom - 16))
+                throw new Exception("Incorrect corner: " + corner);
+        }
+        Console.WriteLine("PASS: All corners support negative display coordinates.");
         var trash = form.Controls.OfType<Button>().Single(b => b.AccessibleName == "Move screenshot to Recycle Bin");
         if (trash.Text != "\uE74D") throw new Exception("Missing trash-can glyph.");
-        type.GetMethod("Trash", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(form, null);
+        type.GetMethod("Trash", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(mirrors[0], null);
         if (File.Exists(path)) throw new Exception("Recycle failed.");
+        if (mirrors.Any(mirror => !mirror.IsDisposed)) throw new Exception("Other display previews remained after recycling.");
+        Console.WriteLine("PASS: Recycling closes every mirrored preview.");
         Console.WriteLine("PASS: Trash recycled the test PNG while its thumbnail was open.");
         Console.WriteLine("RECYCLED_TEST=" + Path.GetFileName(path));
     }

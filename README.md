@@ -2,14 +2,26 @@
 
 A small Windows screenshot utility inspired by the Mac's floating screenshot thumbnail.
 
-Press **Print Screen**, drag to select an area, and a temporary thumbnail appears in the bottom-right corner of the display under your pointer.
+Press **Print Screen**, drag to select an area, and a temporary thumbnail appears in the bottom-right corner of every display. Each preview represents the same saved PNG.
 
 - Drag the thumbnail into an application that accepts image files.
 - Click the thumbnail, right-click it, or click X to dismiss it.
 - Hover to reveal a trash-can button that moves the saved PNG to the Recycle Bin.
 - Leave it alone and it fades after eight seconds. Hovering restarts the countdown.
 - Screenshots are saved in your Windows Pictures folder under `Screenshots` and copied to the clipboard when available.
-- The tray menu provides full-screen capture, access to saved screenshots, and Quit.
+- The tray menu provides settings, an enabled switch, full-screen capture, access to saved screenshots, and Quit.
+
+## On, Off, and Settings
+
+Open **MacShot Settings** from the Windows Start menu, or double-click the MacShot tray icon (it may be behind the tray's upward arrow). Opening the executable again also opens settings for the existing instance.
+
+- **Enabled** controls the Print Screen shortcut. Turn it off to let Windows handle Print Screen normally; turn it back on to restore MacShot. The tray menu has the same switch.
+- **Quit** in the tray menu fully exits the app. Launch MacShot Settings to start it again.
+- **Start with Windows** controls sign-in startup independently of Enabled.
+- Settings include every display versus the pointer's display, four corners, preview width, auto-dismiss duration (zero means never), clipboard copying, and the screenshot folder. Click Save to apply.
+- Dismissing a preview keeps the file. Trashing or successfully dragging it closes all mirrored previews. A cancelled drag keeps the preview available.
+
+Settings persist in `%LOCALAPPDATA%\MacShotThumbnail\settings.json`. Recoverable capture errors are reported through a tray notification; diagnostic logs are size-limited in that same folder. Invalid settings fall back to defaults. Screenshots are never uploaded.
 
 This is an **early release**, developed and tested on one Windows 11 computer. It is not affiliated with Apple or Microsoft.
 
@@ -52,7 +64,7 @@ dotnet publish src/MacShotThumbnail/MacShotThumbnail.csproj -c Release -r win-x6
 dotnet run --project src/ThumbnailVerification/ThumbnailVerification.csproj -c Release
 ```
 
-Run in an interactive Windows desktop session. The check creates a synthetic image in the temporary folder, opens its thumbnail, verifies exclusive access to the PNG and bottom-right placement, checks the trash icon, and invokes the recycle action. It leaves its synthetic test image recoverable in the Recycle Bin.
+Run in an interactive Windows desktop session. The check creates a synthetic image, opens previews on all connected displays, verifies exclusive PNG access and corner placement (including negative coordinates), checks the trash icon, and verifies that recycling closes the mirrored previews. It leaves its synthetic test image recoverable in the Recycle Bin. This passed on three connected displays.
 
 The Print Screen area selector was also exercised through desktop control. Physical drag-and-drop into other apps and behavior after reboot remain unverified. Bug reports with Windows version, display scaling, and reproduction steps are welcome in [Issues](https://github.com/gitWRLD999/macshot-thumbnail/issues).
 

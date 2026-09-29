@@ -1,10 +1,12 @@
-First public preview of MacShot Thumbnail for Windows 11 x64.
+MacShot Thumbnail v0.2.0 for Windows 11 x64.
 
-- Print Screen area capture with a temporary bottom-right thumbnail.
-- Drag-out PNG support, click/right-click dismissal, eight-second auto-fade, and a trash-can action.
-- Fixed the preview image retaining a file lock, which prevented recycling captures.
-- MIT-licensed source, optional per-user startup installation, and a self-contained Windows x64 download.
+- Mirrored screenshot previews on every display by default, with coordinated recycling.
+- Settings window: enabled switch, startup, display scope, corner, size, timeout, clipboard, and output folder.
+- Start-menu shortcut and single-instance settings reopening.
+- Atomic settings writes, bounded error logs, capture reentrancy protection, and clipboard retries.
+- Cancelled drag operations keep the thumbnail available.
+- MIT-licensed source and a self-contained Windows x64 download.
 
-Verified on one Windows 11 machine: build, Print Screen selector activation, exclusive access to the PNG while its thumbnail is open, bottom-right position, and actual recycling of a synthetic test image. Broad app drag-and-drop compatibility, multiple-monitor scaling, and reboot behavior are not yet verified.
+Verified on one Windows 11 machine: clean build, three simultaneous display previews, exclusive PNG access, all corner calculations including negative coordinates, recycling with mirrored preview cleanup, settings layout at the current display scaling, and saving settings. Broad app drag-and-drop compatibility, every mixed-DPI configuration, and reboot behavior are not yet verified.
 
 Extract the ZIP and run MacShotThumbnail.exe, or run Install.ps1 for installation and startup at sign-in. The executable is unsigned. See README.md for controls and limitations.

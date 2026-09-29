@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Force -Path $destination | Out-Null
 if ([IO.Path]::GetFullPath($source) -ne [IO.Path]::GetFullPath($executable)) {
     Copy-Item -LiteralPath $source -Destination $executable -Force
 }
-foreach ($name in @('Uninstall.ps1', 'LICENSE', 'README.md')) {
+foreach ($name in @('Uninstall.ps1', 'LICENSE', 'README.md', 'DOTNET-LICENSE.txt', 'WINDOWSDESKTOP-LICENSE.txt')) {
     $file = Join-Path $PSScriptRoot $name
     if ((Test-Path -LiteralPath $file) -and ([IO.Path]::GetFullPath($file) -ne (Join-Path $destination $name))) {
         Copy-Item -LiteralPath $file -Destination $destination -Force
@@ -21,4 +21,10 @@ $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 New-Item -Path $runKey -Force | Out-Null
 New-ItemProperty -Path $runKey -Name MacShotThumbnail -PropertyType String -Value ('"' + $executable + '"') -Force | Out-Null
 Start-Process -FilePath $executable -WindowStyle Hidden
+$shortcutPath = Join-Path ([Environment]::GetFolderPath('Programs')) 'MacShot Settings.lnk'
+$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcutPath)
+$shortcut.TargetPath = $executable
+$shortcut.Arguments = '--settings'
+$shortcut.WorkingDirectory = $destination
+$shortcut.Save()
 Write-Host 'Installed. Press Print Screen to capture an area.'
