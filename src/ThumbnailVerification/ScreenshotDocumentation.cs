@@ -3,7 +3,7 @@ using System.Reflection;
 
 internal static class ScreenshotDocumentation
 {
-    public static void Generate(string output)
+    public static void Generate(string output, bool desktop = false)
     {
         Directory.CreateDirectory(output);
         var assembly = Assembly.Load("MacShotThumbnail");
@@ -38,10 +38,22 @@ internal static class ScreenshotDocumentation
         try
         {
             var thumbnailType = assembly.GetType("MacShotThumbnail.ThumbnailForm", true)!;
-            using var thumbnail = (Form)Activator.CreateInstance(thumbnailType, samplePath, Noop(thumbnailType), new Rectangle(0, 0, 1000, 800), settings, null)!;
+            var display = desktop ? Screen.AllScreens.Single(screen => screen.DeviceName == @"\\.\DISPLAY2") : null;
+            using var thumbnail = (Form)Activator.CreateInstance(thumbnailType, samplePath, Noop(thumbnailType), display?.WorkingArea ?? new Rectangle(0, 0, 1000, 800), settings, null)!;
             thumbnail.Show(); Application.DoEvents();
             thumbnailType.GetMethod("Pause")!.Invoke(thumbnail, null);
             foreach (var button in thumbnail.Controls.OfType<Button>()) button.Visible = true;
+            if (display != null)
+            {
+                thumbnail.Refresh(); Application.DoEvents(); Thread.Sleep(500);
+                using var desktopImage = new Bitmap(display.Bounds.Width, display.Bounds.Height);
+                using (var graphics = Graphics.FromImage(desktopImage))
+                    graphics.CopyFromScreen(display.Bounds.Location, Point.Empty, display.Bounds.Size);
+                desktopImage.Save(Path.Combine(output, "desktop-overview.png"), System.Drawing.Imaging.ImageFormat.Png);
+                Console.WriteLine($"Captured {display.DeviceName} at {display.Bounds}; inspect before publishing.");
+                thumbnail.Close();
+                return;
+            }
             Save(thumbnail, Path.Combine(output, "thumbnail.png"));
             thumbnail.Close();
 

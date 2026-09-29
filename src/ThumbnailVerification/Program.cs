@@ -8,6 +8,11 @@ internal static class Program
     {
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
+        if (args.Length == 2 && args[0] == "--desktop-screenshot")
+        {
+            ScreenshotDocumentation.Generate(args[1], true);
+            return;
+        }
         if (args.Length == 2 && args[0] == "--screenshots")
         {
             ScreenshotDocumentation.Generate(args[1]);

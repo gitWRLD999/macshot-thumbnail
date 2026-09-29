@@ -29,7 +29,13 @@ This is an **early release**, developed and tested on one Windows 11 computer. I
 
 ## Screenshots
 
-Actual app controls captured with sample content and a generic folder path. No personal desktop or account information is included.
+Actual app controls captured with sample content and a generic folder path. No personal files or account information is included.
+
+### Desktop Overview
+
+The floating thumbnail on a 1920 x 1080 display, above the taskbar. Sample content is used in the preview.
+
+![Full desktop showing MacShot's thumbnail in the bottom-right corner](docs/screenshots/desktop-overview.png)
 
 ### Floating Thumbnail
 
