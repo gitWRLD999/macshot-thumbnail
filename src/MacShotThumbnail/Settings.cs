@@ -40,26 +40,24 @@ internal sealed class Settings
         File.Move(temporary, FilePath, true);
     }
     public static void Log(Exception error)
+        => LogEvent(error.ToString());
+
+    public static void LogEvent(string message)
     {
         try
         {
             Directory.CreateDirectory(DirectoryPath);
             string path = Path.Combine(DirectoryPath, "errors.log");
             if (File.Exists(path) && new FileInfo(path).Length > 1_000_000) File.Move(path, path + ".old", true);
-            File.AppendAllText(path, $"{DateTimeOffset.Now:u} {error}\n");
+            File.AppendAllText(path, $"{DateTimeOffset.Now:u} {message}\n");
         }
         catch { /* Logging must not prevent recovery. */ }
     }
     public static readonly string[] Corners = ["Bottom right", "Bottom left", "Top right", "Top left"];
     public static bool StartupEnabled
     {
-        get { using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"); return key?.GetValue("MacShotThumbnail") is string; }
-        set
-        {
-            using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-            if (value) key.SetValue("MacShotThumbnail", $"\"{Environment.ProcessPath}\"");
-            else key.DeleteValue("MacShotThumbnail", false);
-        }
+        get => StartupRegistration.Enabled;
+        set => StartupRegistration.Enabled = value;
     }
 }
 
@@ -125,6 +123,7 @@ internal sealed class SettingsForm : Form
         grid.Controls.Add(actions, 0, 10); grid.SetColumnSpan(actions, 2);
         var save = new Button { Text = "Save", AutoSize = true };
         var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
+        cancel.Click += (_, _) => Close();
         var browse = new Button { Text = "Browse folder", AutoSize = true };
         actions.Controls.AddRange([save, cancel, browse]);
         browse.Click += (_, _) => { using var dialog = new FolderBrowserDialog { SelectedPath = folder.Text }; if (dialog.ShowDialog(this) == DialogResult.OK) folder.Text = dialog.SelectedPath; };

@@ -67,13 +67,17 @@ For installation and automatic startup at sign-in, run `Install.ps1` from PowerS
 .\Install.ps1
 ```
 
-It installs under `%LOCALAPPDATA%\Programs\MacShotThumbnail` and adds a startup entry for the current user. Administrator access is not required. Use `Uninstall.ps1` to remove the installed app and startup entry. Uninstalling does not delete your screenshots.
+It installs under `%LOCALAPPDATA%\Programs\MacShotThumbnail` and creates a per-user Task Scheduler task that starts ten seconds after sign-in. It runs in your desktop session without administrator privileges and keeps running on battery. A small supervisor restarts the app five seconds after an unexpected exit, with up to three consecutive short-lived failures. Task Scheduler also has a three-retry failure policy. Use `Uninstall.ps1` to remove the app and task. Uninstalling does not delete your screenshots.
+
+The **Start with Windows** setting controls that task. Choosing Quit exits normally and does not trigger crash recovery. The installer migrates older registry startup entries to the task.
 
 Running the EXE directly is portable and does not enable startup. Only one instance runs at a time; quit an installed copy from its tray menu before trying a portable copy.
 
 ## Behavior and Limits
 
-The app listens for your two configured shortcuts through a Windows keyboard hook. Other combinations pass through. It does not record or store keystrokes. Disable it or quit from the tray to release the shortcuts. Shortcuts are suspended while settings or a capture editor has focus.
+The app listens for your two configured shortcuts through a Windows keyboard hook on a dedicated message thread. Capture and crop operations do not block that thread. The hook renews every thirty seconds to recover from removal or changes in hook order. Other combinations pass through. It does not record or store keystrokes. Disable it or quit from the tray to release the shortcuts. Shortcuts are suspended while settings or a capture editor has focus.
+
+If Adobe Express Photos opens from Print Screen, turn off its **Screenshot Shortcut** toggle in Adobe's settings, or uncheck **Print screen key** in its screenshot toolbar settings. [Adobe's instructions](https://helpx.adobe.com/au/express-photos/desktop/edit-images/revert-print-screen-settings.html) describe both controls. Other screenshot apps can also compete for the key.
 
 Dismissal keeps the saved screenshot. The trash-can button sends it to the Recycle Bin. If your Pictures folder is redirected to OneDrive, Windows/OneDrive may sync the saved files according to your existing settings.
 

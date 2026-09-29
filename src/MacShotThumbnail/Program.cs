@@ -6,11 +6,16 @@ namespace MacShotThumbnail;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static int Main()
     {
+        if (Environment.GetCommandLineArgs().Contains("--supervise")) return Supervisor.Run();
         using var showSettings = new EventWaitHandle(false, EventResetMode.AutoReset, "Local\\MacShotThumbnail.Settings");
         using var mutex = new Mutex(true, "Local\\MacShotThumbnail.SingleInstance", out bool firstInstance);
-        if (!firstInstance) { showSettings.Set(); return; }
+        if (!firstInstance)
+        {
+            if (!Environment.GetCommandLineArgs().Contains("--background")) showSettings.Set();
+            return 0;
+        }
 
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
@@ -18,75 +23,42 @@ internal static class Program
         Application.ThreadException += (_, e) => Settings.Log(e.Exception);
         if (Environment.GetCommandLineArgs().Contains("--settings")) showSettings.Set();
         Application.Run(new ScreenshotApp(showSettings));
+        return 0;
     }
 }
 
 internal sealed class ScreenshotApp : ApplicationContext
 {
     private const int PrintScreenHotkey = 3;
-    private const int KeyboardHook = 13;
-    private const int PrintScreenKey = 0x2C;
     private const int PrintScreenMessage = 0x8001;
     private readonly HotkeyWindow hotkeys;
-    private readonly KeyboardHookProc keyboardHookProc;
-    private readonly IntPtr keyboardHook;
+    private readonly KeyboardShortcuts shortcuts;
     private readonly NotifyIcon tray;
     private readonly List<ThumbnailForm> thumbnails = [];
     private Settings settings = Settings.Load();
     private SettingsForm? settingsForm;
     private readonly System.Windows.Forms.Timer settingsTimer;
     private bool capturing;
-    private readonly HashSet<Keys> heldShortcuts = [];
-    private long lastPrintScreen;
-
-    private delegate IntPtr KeyboardHookProc(int code, IntPtr message, IntPtr data);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct KeyboardEvent
-    {
-        public uint VirtualKey;
-        public uint ScanCode;
-        public uint Flags;
-        public uint Time;
-        public UIntPtr ExtraInfo;
-    }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr SetWindowsHookEx(int id, KeyboardHookProc callback, IntPtr module, uint threadId);
-
-    [DllImport("user32.dll")]
-    private static extern bool UnhookWindowsHookEx(IntPtr hook);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr message, IntPtr data);
-
-    [DllImport("user32.dll")]
-    private static extern bool PostMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int virtualKey);
 
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr window, int command);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr GetModuleHandle(string? moduleName);
 
     public ScreenshotApp(EventWaitHandle showSettings)
     {
         hotkeys = new HotkeyWindow(id =>
         {
-            if (id == PrintScreenHotkey && settings.Enabled) RunCapture(CaptureRegion);
-            if (id == 4 && settings.Enabled) RunCapture(CaptureFullScreen);
+            if (capturing || settingsForm?.ContainsFocus == true) return;
+            if (id == PrintScreenHotkey && settings.Enabled) { Settings.LogEvent("Area capture shortcut received."); RunCapture(CaptureRegion); }
+            if (id == 4 && settings.Enabled) { Settings.LogEvent("Full-screen capture shortcut received."); RunCapture(CaptureFullScreen); }
         });
         _ = hotkeys.Handle;
 
-        keyboardHookProc = HandleKeyboard;
-        keyboardHook = SetWindowsHookEx(KeyboardHook, keyboardHookProc, GetModuleHandle(null), 0);
+        shortcuts = new KeyboardShortcuts(hotkeys.Handle, PrintScreenMessage, settings);
 
         var menu = new ContextMenuStrip();
         var enabled = new ToolStripMenuItem("Enabled") { Checked = settings.Enabled, CheckOnClick = true };
-        enabled.Click += (_, _) => { settings.Enabled = enabled.Checked; settings.Save(); ClosePreviews(); };
+        enabled.Click += (_, _) => { settings.Enabled = enabled.Checked; settings.Save(); UpdateShortcuts(); ClosePreviews(); };
         menu.Items.Add(enabled);
         menu.Opening += (_, _) => enabled.Checked = settings.Enabled;
         menu.Items.Add("Settings...", null, (_, _) => OpenSettings());
@@ -109,20 +81,18 @@ internal sealed class ScreenshotApp : ApplicationContext
         };
         tray.DoubleClick += (_, _) => OpenSettings();
         settingsTimer = new System.Windows.Forms.Timer { Interval = 250 };
-        settingsTimer.Tick += (_, _) => { if (showSettings.WaitOne(0)) OpenSettings(); };
+        settingsTimer.Tick += (_, _) => { if (showSettings.WaitOne(0)) OpenSettings(); UpdateShortcuts(); };
         settingsTimer.Start();
-
-        if (keyboardHook == IntPtr.Zero)
-        {
-            tray.ShowBalloonTip(6000, "Screenshot shortcut unavailable",
-                "Print Screen could not be connected. You can still capture from the tray icon.", ToolTipIcon.Warning);
-        }
+        Settings.LogEvent("MacShot started; shortcuts use a dedicated message thread.");
     }
 
     private void OpenSettings()
     {
         if (settingsForm is { IsDisposed: false }) { ShowWindow(settingsForm.Handle, 9); settingsForm.Activate(); return; }
-        settingsForm = new SettingsForm(settings, value => { settings = value; ClosePreviews(); });
+        settingsForm = new SettingsForm(settings, value => { settings = value; UpdateShortcuts(); ClosePreviews(); });
+        settingsForm.Activated += (_, _) => UpdateShortcuts(true);
+        settingsForm.Deactivate += (_, _) => UpdateShortcuts();
+        settingsForm.FormClosed += (_, _) => UpdateShortcuts();
         settingsForm.Show();
         // Override a hidden startup show state when settings are explicitly requested.
         ShowWindow(settingsForm.Handle, 5);
@@ -138,51 +108,17 @@ internal sealed class ScreenshotApp : ApplicationContext
     {
         if (capturing) return;
         capturing = true;
+        UpdateShortcuts();
         try { action(); }
         catch (Exception error)
         {
             Settings.Log(error);
             tray.ShowBalloonTip(5000, "MacShot", error.Message, ToolTipIcon.Warning);
         }
-        finally { capturing = false; }
+        finally { capturing = false; UpdateShortcuts(); }
     }
 
-    private IntPtr HandleKeyboard(int code, IntPtr message, IntPtr data)
-    {
-        if (code >= 0)
-        {
-            Keys key = (Keys)Marshal.PtrToStructure<KeyboardEvent>(data).VirtualKey;
-            int kind = message.ToInt32();
-            if (kind is 0x0101 or 0x0105 && heldShortcuts.Remove(key)) return (IntPtr)1;
-            Keys combination = key;
-            if ((GetAsyncKeyState(0x10) & 0x8000) != 0) combination |= Keys.Shift;
-            if ((GetAsyncKeyState(0x11) & 0x8000) != 0) combination |= Keys.Control;
-            if ((GetAsyncKeyState(0x12) & 0x8000) != 0) combination |= Keys.Alt;
-            bool windows = (GetAsyncKeyState(0x5B) & 0x8000) != 0 || (GetAsyncKeyState(0x5C) & 0x8000) != 0;
-            if (settings.Enabled && !windows && settingsForm?.ContainsFocus != true && !capturing &&
-                (combination == settings.AreaShortcut || combination == settings.FullShortcut))
-            {
-                if (kind is 0x0100 or 0x0104)
-                {
-                    if (heldShortcuts.Add(key)) QueuePrintScreen(combination == settings.AreaShortcut ? 3 : 4);
-                }
-                else if (kind is 0x0101 or 0x0105)
-                {
-                    if (key == Keys.PrintScreen) QueuePrintScreen(combination == settings.AreaShortcut ? 3 : 4);
-                }
-                return (IntPtr)1;
-            }
-        }
-        return CallNextHookEx(keyboardHook, code, message, data);
-    }
-
-    private void QueuePrintScreen(int action)
-    {
-        long now = Environment.TickCount64;
-        if (now - lastPrintScreen < 400) return;
-        lastPrintScreen = now;
-        PostMessage(hotkeys.Handle, PrintScreenMessage, (IntPtr)action, IntPtr.Zero);
-    }
+    private void UpdateShortcuts(bool forceSuspend = false) => shortcuts.Update(settings, forceSuspend || capturing || settingsForm?.ContainsFocus == true);
 
     private static Bitmap Capture(Rectangle bounds)
     {
@@ -274,7 +210,7 @@ internal sealed class ScreenshotApp : ApplicationContext
     protected override void ExitThreadCore()
     {
         foreach (var thumbnail in thumbnails.ToArray()) thumbnail.Close();
-        if (keyboardHook != IntPtr.Zero) UnhookWindowsHookEx(keyboardHook);
+        shortcuts.Dispose();
         hotkeys.DestroyHandle();
         settingsTimer.Dispose();
         settingsForm?.Close();

@@ -5,6 +5,12 @@ if (!(Test-Path -LiteralPath $source -PathType Leaf)) {
 }
 $destination = Join-Path $env:LOCALAPPDATA 'Programs\MacShotThumbnail'
 $executable = Join-Path $destination 'MacShotThumbnail.exe'
+$userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$taskName = 'MacShotThumbnail-' + $userSid
+$scheduler = New-Object -ComObject Schedule.Service
+$scheduler.Connect()
+try { $scheduler.GetFolder('\').GetTask($taskName).Stop(0) }
+catch { if ($_.Exception.HResult -ne -2147024894) { throw } }
 Get-Process MacShotThumbnail -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -eq $executable } | Stop-Process
 New-Item -ItemType Directory -Force -Path $destination | Out-Null
@@ -17,10 +23,28 @@ foreach ($name in @('Uninstall.ps1', 'LICENSE', 'README.md', 'DOTNET-LICENSE.txt
         Copy-Item -LiteralPath $file -Destination $destination -Force
     }
 }
-$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-New-Item -Path $runKey -Force | Out-Null
-New-ItemProperty -Path $runKey -Name MacShotThumbnail -PropertyType String -Value ('"' + $executable + '"') -Force | Out-Null
-Start-Process -FilePath $executable -WindowStyle Hidden
+$task = $scheduler.NewTask(0)
+$task.RegistrationInfo.Description = 'Start MacShot after sign-in and restart it after a failure.'
+$task.Principal.UserId = $userSid
+$task.Principal.LogonType = 3
+$task.Principal.RunLevel = 0
+$task.Settings.DisallowStartIfOnBatteries = $false
+$task.Settings.StopIfGoingOnBatteries = $false
+$task.Settings.ExecutionTimeLimit = 'PT0S'
+$task.Settings.StartWhenAvailable = $true
+$task.Settings.MultipleInstances = 2
+$task.Settings.RestartCount = 3
+$task.Settings.RestartInterval = 'PT1M'
+$trigger = $task.Triggers.Create(9)
+$trigger.UserId = $userSid
+$trigger.Delay = 'PT10S'
+$action = $task.Actions.Create(0)
+$action.Path = $executable
+$action.Arguments = '--supervise'
+$action.WorkingDirectory = $destination
+$registered = $scheduler.GetFolder('\').RegisterTaskDefinition($taskName, $task, 6, $userSid, $null, 3)
+Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name MacShotThumbnail -ErrorAction SilentlyContinue
+$registered.Run($null) | Out-Null
 $shortcutPath = Join-Path ([Environment]::GetFolderPath('Programs')) 'MacShot Settings.lnk'
 $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcutPath)
 $shortcut.TargetPath = $executable

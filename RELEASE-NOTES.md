@@ -1,17 +1,12 @@
-MacShot Thumbnail v0.3.0 for Windows 11 x64.
+MacShot Thumbnail v0.3.1 for Windows 11 x64.
 
-- Keep the dragged preview available for at least eight seconds afterward, including access to Trash.
-- Crop saved screenshots from a thumbnail button; update mirrored previews and clipboard after confirmation.
-- Separate configurable area and full-screen shortcuts, defaulting to Print Screen and Ctrl+Print Screen.
-- Verified crop coordinate conversion, post-drag lifetime, shortcut recording UI, and recycling on two connected displays. Broad receiving-app drag-and-drop compatibility remains unverified.
+- Replace the registry startup entry with a per-user sign-in task, delayed ten seconds, with retries after failures and no battery or execution-time cutoff.
+- Supervise the capture process and restart unexpected exits after five seconds; a normal Quit exits both processes.
+- Keep the Start with Windows setting and uninstaller synchronized with that task.
+- Move keyboard handling to a dedicated message thread and renew its hook periodically, so capture work cannot block shortcut delivery.
+- Add bounded startup/capture diagnostics and fix Cancel in the nonmodal settings window.
+- Document Adobe Express Photos' competing Print Screen setting.
 
-- Mirrored screenshot previews on every display by default, with coordinated recycling.
-- Settings window: enabled switch, startup, display scope, corner, size, timeout, clipboard, and output folder.
-- Start-menu shortcut and single-instance settings reopening.
-- Atomic settings writes, bounded error logs, capture reentrancy protection, and clipboard retries.
-- Cancelled drag operations keep the thumbnail available.
-- MIT-licensed source and a self-contained Windows x64 download.
+Verified: clean build, three-display thumbnail/recycle checks, task registration and launch, installed settings startup state, supervisor restarting a forcibly terminated capture process after five seconds, and Print Screen opening MacShot's area selector with Adobe Express Photos open after its override was disabled. Full reboot behavior and broad receiving-app drag-and-drop compatibility remain unverified.
 
-Verified on one Windows 11 machine: clean build, three simultaneous display previews, exclusive PNG access, all corner calculations including negative coordinates, recycling with mirrored preview cleanup, settings layout at the current display scaling, and saving settings. Broad app drag-and-drop compatibility, every mixed-DPI configuration, and reboot behavior are not yet verified.
-
-Extract the ZIP and run MacShotThumbnail.exe, or run Install.ps1 for installation and startup at sign-in. The executable is unsigned. See README.md for controls and limitations.
+Extract the ZIP and run Install.ps1 to upgrade the installed app and startup task. The executable is unsigned. See README.md for controls and limitations.
