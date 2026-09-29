@@ -75,7 +75,21 @@ internal static class ScreenshotDocumentation
             using var settingsForm = (Form)Activator.CreateInstance(settingsFormType, settings, Noop(settingsType))!;
             settingsForm.Show(); Application.DoEvents();
             Save(settingsForm, Path.Combine(output, "settings.png"));
+            var tabs = settingsForm.Controls.OfType<TabControl>().Single();
+            foreach (TabPage page in tabs.TabPages)
+            {
+                tabs.SelectedTab = page; Application.DoEvents();
+                Save(settingsForm, Path.Combine(output, "settings-" + page.Text.ToLowerInvariant() + ".png"));
+            }
             settingsForm.Close();
+            var bannerType = assembly.GetType("MacShotThumbnail.CaptureBanner", true)!;
+            using var banner = (Form)Activator.CreateInstance(bannerType, settings, Screen.FromPoint(Cursor.Position).WorkingArea, new Action<string>(_ => { }), new Action(() => { }), new Action<string>(_ => { }))!;
+            banner.Show(); Application.DoEvents(); Save(banner, Path.Combine(output, "banner.png")); banner.Close();
+            using var batch = (Form)Activator.CreateInstance(thumbnailType, samplePath, Noop(thumbnailType), Screen.FromPoint(Cursor.Position).WorkingArea, settings, null)!;
+            thumbnailType.GetMethod("ConfigureBatch")!.Invoke(batch, [0, 3, new Action<int>(_ => { })]);
+            batch.Show(); Application.DoEvents(); thumbnailType.GetMethod("Pause")!.Invoke(batch, null);
+            foreach (var button in batch.Controls.OfType<Button>()) button.Visible = true;
+            Save(batch, Path.Combine(output, "multi-display-thumbnail.png")); batch.Close();
             Console.WriteLine("Rendered thumbnail, functional crop selection, and settings with non-personal sample data.");
         }
         finally { File.Delete(samplePath); }
@@ -86,6 +100,7 @@ internal static class ScreenshotDocumentation
     private static void Save(Form form, string path)
     {
         form.TopMost = true;
+        form.Activate(); form.BringToFront();
         form.Refresh();
         Application.DoEvents();
         Thread.Sleep(250);

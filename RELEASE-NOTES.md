@@ -1,12 +1,15 @@
-MacShot Thumbnail v0.3.1 for Windows 11 x64.
+MacShot Thumbnail v0.4.0 for Windows 11 x64.
 
-- Replace the registry startup entry with a per-user sign-in task, delayed ten seconds, with retries after failures and no battery or execution-time cutoff.
-- Supervise the capture process and restart unexpected exits after five seconds; a normal Quit exits both processes.
-- Keep the Start with Windows setting and uninstaller synchronized with that task.
-- Move keyboard handling to a dedicated message thread and renew its hook periodically, so capture work cannot block shortcut delivery.
-- Add bounded startup/capture diagnostics and fix Cancel in the nonmodal settings window.
-- Document Adobe Express Photos' competing Print Screen setting.
+- Optional Adobe-style capture banner with configurable capture buttons, timeout, top/bottom position, display mirroring, delay, tools and settings.
+- Native all-display mega screenshot and separate monitor files from one desktop capture, with thumbnail batch navigation.
+- Active-window, last-area and fixed-size capture, delayed capture and optional pointer.
+- Six-tab settings for capture, banner, previews, files, shortcuts and advanced tools. Add opacity/margin, hover behavior, action-button visibility, configurable post-drag duration, output codecs and file/image clipboard options.
+- Six configurable native shortcuts plus optional per-tool shortcuts.
+- Native searchable screenshot history with preview/copy/crop/edit/OCR/pin/recycle commands.
+- Optional verified ShareX 21.0.0 portable integration for scrolling/freehand/interval capture, MP4/GIF recordings, annotation/redaction, OCR, effects, pins, QR, color/ruler utilities, image utilities and video tools. Its private profile starts with uploads and competing hotkeys disabled. ShareX remains a separate GPL program, not included in this MIT release ZIP.
+- Preserve the existing sign-in task, supervisor, hook recovery, easy dismissal, recycled-file handling and drag-then-trash workflow.
+- Add feature comparison, integration documentation and sanitized screenshots.
 
-Verified: clean build, three-display thumbnail/recycle checks, task registration and launch, installed settings startup state, supervisor restarting a forcibly terminated capture process after five seconds, and Print Screen opening MacShot's area selector with Adobe Express Photos open after its override was disabled. Full reboot behavior and broad receiving-app drag-and-drop compatibility remain unverified.
+Verified: clean build, real 5760x1200 mega capture and three separate monitors, negative-coordinate pixel splitting, all four output codecs, settings recovery and rendering, banner dispatch, prior thumbnail/crop/recycle checks, advanced annotation/local OCR through desktop control, and three-second MP4/GIF recordings of a synthetic sample canvas using an existing FFmpeg installation. Full reboot behavior, every advanced setting and broad receiving-app compatibility remain unverified.
 
-Extract the ZIP and run Install.ps1 to upgrade the installed app and startup task. The executable is unsigned. See README.md for controls and limitations.
+Extract the ZIP and run Install.ps1 to upgrade. Enable the optional banner in Settings > Banner. Install the optional toolkit from Settings > Advanced. Detailed toolkit preferences open ShareX's own settings. See README.md and docs/FEATURE-COMPARISON.md for coverage and exclusions. The executable is unsigned.

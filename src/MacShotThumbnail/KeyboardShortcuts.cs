@@ -5,8 +5,8 @@ namespace MacShotThumbnail;
 
 internal sealed class KeyboardShortcuts : IDisposable
 {
-    private sealed record Binding(Keys Area, Keys Full, bool Enabled, bool Suspended);
-    private volatile Binding binding = new(Keys.PrintScreen, Keys.Control | Keys.PrintScreen, false, false);
+    private sealed record Binding(Keys[] Keys, int[] Actions, bool Enabled, bool Suspended);
+    private volatile Binding binding = new([], [], false, false);
     private readonly Thread thread;
     private readonly ManualResetEventSlim ready = new();
     private readonly IntPtr target;
@@ -51,7 +51,15 @@ internal sealed class KeyboardShortcuts : IDisposable
         ready.Wait();
         if (startupError != null) { Settings.Log(startupError); }
     }
-    public void Update(Settings settings, bool suspended) => binding = new(settings.AreaShortcut, settings.FullShortcut, settings.Enabled, suspended);
+    public void Update(Settings settings, bool suspended)
+    {
+        var keys = new List<Keys> { settings.AreaShortcut, settings.FullShortcut, settings.CombinedShortcut, settings.SeparateShortcut, settings.WindowShortcut, settings.BannerShortcut };
+        var actions = new List<int> { 3, 4, 5, 6, 7, 8 };
+        if (settings.AdvancedEnabled)
+            for (int i = 0; i < AdvancedTools.Catalog.Length; i++)
+                if (settings.ToolShortcuts.TryGetValue(AdvancedTools.Catalog[i].Command, out Keys value)) { keys.Add(value); actions.Add(100 + i); }
+        binding = new(keys.ToArray(), actions.ToArray(), settings.Enabled, suspended);
+    }
 
     private void Run()
     {
@@ -102,14 +110,15 @@ internal sealed class KeyboardShortcuts : IDisposable
         if ((GetAsyncKeyState(0x11) & 0x8000) != 0) combination |= Keys.Control;
         if ((GetAsyncKeyState(0x12) & 0x8000) != 0) combination |= Keys.Alt;
         bool windows = (GetAsyncKeyState(0x5B) & 0x8000) != 0 || (GetAsyncKeyState(0x5C) & 0x8000) != 0;
-        if (windows || (combination != current.Area && combination != current.Full)) return CallNextHookEx(hook, code, message, data);
+        int action = Array.IndexOf(current.Keys, combination);
+        if (windows || action < 0) return CallNextHookEx(hook, code, message, data);
         if ((!up && held.Add(key)) || (up && key == Keys.PrintScreen))
         {
             long now = Environment.TickCount64;
             if (now - lastCapture >= 400)
             {
                 lastCapture = now;
-                PostMessage(target, captureMessage, (IntPtr)(combination == current.Area ? 3 : 4), IntPtr.Zero);
+                PostMessage(target, captureMessage, (IntPtr)current.Actions[action], IntPtr.Zero);
             }
         }
         return (IntPtr)1;

@@ -8,6 +8,31 @@ internal static class Program
     {
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
+        if (args.Length == 1 && args[0] == "--recording-test") { AdvancedToolkitVerification.Run(Assembly.Load("MacShotThumbnail")); return; }
+        if (args.Length >= 2 && args[0] == "--tool")
+        {
+            var assembly = Assembly.Load("MacShotThumbnail");
+            var toolSettingsType = assembly.GetType("MacShotThumbnail.Settings", true)!;
+            var toolSettings = toolSettingsType.GetMethod("Load")!.Invoke(null, null)!;
+            var toolkit = assembly.GetType("MacShotThumbnail.AdvancedTools", true)!;
+            using var process = (System.Diagnostics.Process)toolkit.GetMethod("Run", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [args[1], toolSettings, args.Length > 2 ? args[2] : null])!;
+            Console.WriteLine("Dispatched toolkit command: " + args[1]);
+            Console.WriteLine("Toolkit running: " + toolkit.GetProperty("Running", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null));
+            return;
+        }
+        if (args.Length >= 1 && args[0] == "--install-toolkit")
+        {
+            var assembly = Assembly.Load("MacShotThumbnail");
+            var installSettingsType = assembly.GetType("MacShotThumbnail.Settings", true)!;
+            var installSettings = installSettingsType.GetMethod("Load")!.Invoke(null, null)!;
+            if (args.Length == 2) installSettingsType.GetProperty("FfmpegPath")!.SetValue(installSettings, args[1]);
+            var toolkit = assembly.GetType("MacShotThumbnail.AdvancedTools", true)!;
+            var task = (Task)toolkit.GetMethod("InstallAsync", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [installSettings, new Progress<string>(Console.WriteLine), CancellationToken.None])!;
+            task.GetAwaiter().GetResult();
+            installSettingsType.GetMethod("Save")!.Invoke(installSettings, null);
+            Console.WriteLine("PASS: Verified ShareX toolkit installed; no competing hotkeys or uploads.");
+            return;
+        }
         if (args.Length == 2 && args[0] == "--desktop-screenshot")
         {
             ScreenshotDocumentation.Generate(args[1], true);
@@ -56,7 +81,17 @@ internal static class Program
         Console.WriteLine("PASS: Crop maps zoomed image selection to original pixels.");
         var settingsType = type.Assembly.GetType("MacShotThumbnail.Settings", true)!;
         var settings = Activator.CreateInstance(settingsType)!;
+        settingsType.GetProperty("Seconds")!.SetValue(settings, 30);
+        settingsType.GetProperty("PostDragSeconds")!.SetValue(settings, 1);
+        using (var shortPreview = (Form)Activator.CreateInstance(type, path, callback, area, settings, null)!)
+        {
+            type.GetMethod("ResumeAfterDrag")!.Invoke(shortPreview, null);
+            var shortExpiry = (DateTime)type.GetField("expiresAt", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(shortPreview)!;
+            if (shortExpiry > DateTime.UtcNow.AddSeconds(2)) throw new Exception("Post-drag timeout did not honor its independent setting.");
+        }
+        Console.WriteLine("PASS: Independent post-drag timeout is honored even with a longer normal timeout.");
         settingsType.GetProperty("Seconds")!.SetValue(settings, 0);
+        settingsType.GetProperty("PostDragSeconds")!.SetValue(settings, 8);
         var mirrors = new List<Form>();
         Action closeAll = () => { foreach (var mirror in mirrors.ToArray()) mirror.Close(); };
         foreach (var display in Screen.AllScreens)
@@ -86,5 +121,6 @@ internal static class Program
         Console.WriteLine("PASS: Recycling closes every mirrored preview.");
         Console.WriteLine("PASS: Trash recycled the test PNG while its thumbnail was open.");
         Console.WriteLine("RECYCLED_TEST=" + Path.GetFileName(path));
+        ExpandedVerification.Run(type.Assembly);
     }
 }

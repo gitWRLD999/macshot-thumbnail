@@ -23,6 +23,10 @@ foreach ($name in @('Uninstall.ps1', 'LICENSE', 'README.md', 'DOTNET-LICENSE.txt
         Copy-Item -LiteralPath $file -Destination $destination -Force
     }
 }
+$documentation = Join-Path $PSScriptRoot 'docs'
+if ((Test-Path -LiteralPath $documentation -PathType Container) -and ([IO.Path]::GetFullPath($PSScriptRoot) -ne [IO.Path]::GetFullPath($destination))) {
+    Copy-Item -LiteralPath $documentation -Destination $destination -Recurse -Force
+}
 $task = $scheduler.NewTask(0)
 $task.RegistrationInfo.Description = 'Start MacShot after sign-in and restart it after a failure.'
 $task.Principal.UserId = $userSid

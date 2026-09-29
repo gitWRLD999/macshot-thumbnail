@@ -1,0 +1,19 @@
+﻿Capture Banner Preview Files
+Screenshot shortcuts enabled
+Start with Windows
+Full-screen shortcut captures
+Capture delay (seconds)
+Include mouse pointer
+Fixed region width (pixels)
+Fixed region height (pixels)
+Capture sound
+All displays: mega image
+All displays: separate files
+Shortcuts Advanced
+Monitor
+800
+600
+Capture
+Capture
+Cancel
+Save

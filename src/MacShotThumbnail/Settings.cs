@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Microsoft.Win32;
 
 namespace MacShotThumbnail;
 
@@ -14,6 +13,75 @@ internal sealed class Settings
     public Keys FullShortcut { get; set; } = Keys.Control | Keys.PrintScreen;
     public string Corner { get; set; } = "Bottom right";
     public string Folder { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Screenshots");
+    public bool ShowBanner { get; set; }
+    public bool BannerAllDisplays { get; set; }
+    public string BannerPosition { get; set; } = "Top";
+    public int BannerSeconds { get; set; } = 20;
+    public string FullCaptureMode { get; set; } = "Monitor";
+    public string[] BannerModes { get; set; } = ["Area", "Monitor", "Combined", "Separate", "Window", "LastArea"];
+    public string[] Tools { get; set; } = AdvancedTools.Catalog.Select(t => t.Command).ToArray();
+    public Dictionary<string, Keys> ToolShortcuts { get; set; } = new();
+    public int Delay { get; set; }
+    public bool IncludeCursor { get; set; }
+    public int FixedWidth { get; set; } = 800;
+    public int FixedHeight { get; set; } = 600;
+    public bool ShowPreview { get; set; } = true;
+    public bool PauseOnHover { get; set; } = true;
+    public bool ShowButtonsAlways { get; set; }
+    public bool CropButton { get; set; } = true;
+    public bool TrashButton { get; set; } = true;
+    public bool EditButton { get; set; } = true;
+    public int PostDragSeconds { get; set; } = 8;
+    public int PreviewOpacity { get; set; } = 100;
+    public int PreviewMargin { get; set; } = 16;
+    public string ImageFormat { get; set; } = "PNG";
+    public int JpegQuality { get; set; } = 90;
+    public string NamePrefix { get; set; } = "Screenshot";
+    public bool CopyFiles { get; set; }
+    public bool CaptureSound { get; set; }
+    public bool EditAfterCapture { get; set; }
+    public Keys CombinedShortcut { get; set; } = Keys.Control | Keys.Shift | Keys.PrintScreen;
+    public Keys SeparateShortcut { get; set; } = Keys.Alt | Keys.Shift | Keys.PrintScreen;
+    public Keys WindowShortcut { get; set; } = Keys.Alt | Keys.PrintScreen;
+    public Keys BannerShortcut { get; set; } = Keys.Shift | Keys.PrintScreen;
+    public bool AdvancedEnabled { get; set; } = true;
+    public int RecordingFps { get; set; } = 30;
+    public int GifFps { get; set; } = 15;
+    public bool RecordCursor { get; set; } = true;
+    public string FfmpegPath { get; set; } = "";
+    public Settings Copy() => JsonSerializer.Deserialize<Settings>(JsonSerializer.Serialize(this))!;
+    public void Normalize()
+    {
+        Width = Math.Clamp(Width, 160, 480); Seconds = Math.Clamp(Seconds, 0, 60);
+        Delay = Math.Clamp(Delay, 0, 30); BannerSeconds = Math.Clamp(BannerSeconds, 0, 120);
+        FixedWidth = Math.Clamp(FixedWidth, 4, 16000); FixedHeight = Math.Clamp(FixedHeight, 4, 16000);
+        PostDragSeconds = Math.Clamp(PostDragSeconds, 1, 60); PreviewMargin = Math.Clamp(PreviewMargin, 0, 100);
+        PreviewOpacity = Math.Clamp(PreviewOpacity, 25, 100); JpegQuality = Math.Clamp(JpegQuality, 1, 100);
+        RecordingFps = Math.Clamp(RecordingFps, 1, 60); GifFps = Math.Clamp(GifFps, 1, 30);
+        if (!Corners.Contains(Corner)) Corner = Corners[0];
+        if (!new[] { "PNG", "JPEG", "BMP", "TIFF" }.Contains(ImageFormat)) ImageFormat = "PNG";
+        if (!new[] { "Monitor", "Combined", "Separate" }.Contains(FullCaptureMode)) FullCaptureMode = "Monitor";
+        if (BannerPosition != "Bottom") BannerPosition = "Top";
+        BannerModes = (BannerModes ?? []).Where(CaptureModes.Names.ContainsKey).Distinct().ToArray();
+        Tools = (Tools ?? []).Where(c => AdvancedTools.Catalog.Any(t => t.Command == c)).Distinct().ToArray();
+        if (string.IsNullOrWhiteSpace(Folder)) Folder = new Settings().Folder;
+        if (string.IsNullOrWhiteSpace(NamePrefix) || NamePrefix.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) NamePrefix = "Screenshot";
+        var defaults = new Settings();
+        var used = new HashSet<Keys>();
+        foreach (string name in ShortcutProperties)
+        {
+            var property = typeof(Settings).GetProperty(name)!;
+            Keys keys = (Keys)property.GetValue(this)!;
+            if (!ShortcutRules.Valid(keys) || !used.Add(keys))
+            {
+                keys = (Keys)property.GetValue(defaults)!;
+                if (!used.Add(keys)) keys = Enumerable.Range((int)Keys.F13, 12).Select(v => (Keys)v).First(used.Add);
+                property.SetValue(this, keys);
+            }
+        }
+        ToolShortcuts = (ToolShortcuts ?? new()).Where(pair => AdvancedTools.Catalog.Any(t => t.Command == pair.Key) && ShortcutRules.Valid(pair.Value) && used.Add(pair.Value)).ToDictionary(pair => pair.Key, pair => pair.Value);
+    }
+    internal static readonly string[] ShortcutProperties = [nameof(AreaShortcut), nameof(FullShortcut), nameof(CombinedShortcut), nameof(SeparateShortcut), nameof(WindowShortcut), nameof(BannerShortcut)];
     internal static readonly string DirectoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MacShotThumbnail");
     private static string FilePath => Path.Combine(DirectoryPath, "settings.json");
     public static Settings Load()
@@ -21,13 +89,7 @@ internal sealed class Settings
         try
         {
             var value = File.Exists(FilePath) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath)) ?? new() : new Settings();
-            value.Width = Math.Clamp(value.Width, 160, 480);
-            value.Seconds = Math.Clamp(value.Seconds, 0, 60);
-            if (!ShortcutRules.Valid(value.AreaShortcut)) value.AreaShortcut = Keys.PrintScreen;
-            if (!ShortcutRules.Valid(value.FullShortcut) || value.FullShortcut == value.AreaShortcut)
-                value.FullShortcut = value.AreaShortcut == (Keys.Control | Keys.PrintScreen) ? Keys.Alt | Keys.PrintScreen : Keys.Control | Keys.PrintScreen;
-            if (!Corners.Contains(value.Corner)) value.Corner = Corners[0];
-            if (string.IsNullOrWhiteSpace(value.Folder)) value.Folder = new Settings().Folder;
+            value.Normalize();
             return value;
         }
         catch (Exception error) { Log(error); return new(); }
@@ -58,93 +120,5 @@ internal sealed class Settings
     {
         get => StartupRegistration.Enabled;
         set => StartupRegistration.Enabled = value;
-    }
-}
-
-internal sealed class SettingsForm : Form
-{
-    public SettingsForm(Settings current, Action<Settings> apply)
-    {
-        SuspendLayout();
-        Text = "MacShot settings";
-        Font = new Font("Segoe UI", 10);
-        ClientSize = new Size(550, 430);
-        MinimumSize = new Size(570, 470);
-        StartPosition = FormStartPosition.CenterScreen;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        var grid = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(20), ColumnCount = 2, RowCount = 9 };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        Controls.Add(grid);
-        var enabled = new CheckBox { Text = "Enabled", Checked = current.Enabled, AutoSize = true };
-        var startup = new CheckBox { Text = "Start with Windows", Checked = Settings.StartupEnabled, AutoSize = true };
-        var displays = new CheckBox { Text = "Show on every display", Checked = current.AllDisplays, AutoSize = true };
-        var clipboard = new CheckBox { Text = "Copy image to clipboard", Checked = current.CopyToClipboard, AutoSize = true };
-        var corner = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
-        corner.Items.AddRange(Settings.Corners); corner.SelectedItem = current.Corner;
-        var width = new NumericUpDown { Minimum = 160, Maximum = 480, Increment = 20, Value = current.Width, Dock = DockStyle.Fill };
-        var seconds = new NumericUpDown { Minimum = 0, Maximum = 60, Value = current.Seconds, Dock = DockStyle.Fill };
-        var folder = new TextBox { Text = current.Folder, Dock = DockStyle.Fill };
-        TextBox Shortcut(Keys value)
-        {
-            var box = new TextBox { ReadOnly = true, Tag = value, Text = new KeysConverter().ConvertToString(value), Dock = DockStyle.Fill };
-            box.KeyDown += (_, e) =>
-            {
-                e.SuppressKeyPress = true;
-                if (!ShortcutRules.Valid(e.KeyData)) return;
-                box.Tag = e.KeyData;
-                box.Text = new KeysConverter().ConvertToString(e.KeyData);
-            };
-            return box;
-        }
-        var areaShortcut = Shortcut(current.AreaShortcut);
-        var fullShortcut = Shortcut(current.FullShortcut);
-        void Row(int row, string label, Control control)
-        {
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-            grid.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
-            control.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            grid.Controls.Add(control, 1, row);
-        }
-        Row(0, "Screenshot shortcuts", enabled);
-        Row(1, "Startup", startup);
-        Row(2, "Displays", displays);
-        Row(3, "Clipboard", clipboard);
-        Row(4, "Position", corner);
-        Row(5, "Preview width (pixels)", width);
-        Row(6, "Dismiss seconds (0 = never)", seconds);
-        Row(7, "Screenshot folder", folder);
-        Row(8, "Area capture shortcut", areaShortcut);
-        Row(9, "Full-screen shortcut", fullShortcut);
-        ClientSize = new Size(550, 510);
-        grid.RowCount = 11;
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        grid.Controls.Add(actions, 0, 10); grid.SetColumnSpan(actions, 2);
-        var save = new Button { Text = "Save", AutoSize = true };
-        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
-        cancel.Click += (_, _) => Close();
-        var browse = new Button { Text = "Browse folder", AutoSize = true };
-        actions.Controls.AddRange([save, cancel, browse]);
-        browse.Click += (_, _) => { using var dialog = new FolderBrowserDialog { SelectedPath = folder.Text }; if (dialog.ShowDialog(this) == DialogResult.OK) folder.Text = dialog.SelectedPath; };
-        save.Click += (_, _) =>
-        {
-            try
-            {
-                string destination = Path.GetFullPath(folder.Text.Trim());
-                if (Equals(areaShortcut.Tag, fullShortcut.Tag)) throw new InvalidOperationException("Choose different shortcuts for area and full-screen capture.");
-                Directory.CreateDirectory(destination);
-                var next = new Settings { Enabled = enabled.Checked, AllDisplays = displays.Checked, CopyToClipboard = clipboard.Checked, Width = (int)width.Value, Seconds = (int)seconds.Value, Corner = (string)corner.SelectedItem!, Folder = destination };
-                next.AreaShortcut = (Keys)areaShortcut.Tag!;
-                next.FullShortcut = (Keys)fullShortcut.Tag!;
-                Settings.StartupEnabled = startup.Checked;
-                next.Save(); apply(next); Close();
-            }
-            catch (Exception error) { Settings.Log(error); MessageBox.Show(this, error.Message, "Settings could not be saved", MessageBoxButtons.OK, MessageBoxIcon.Error); }
-        };
-        AcceptButton = save; CancelButton = cancel;
-        AutoScaleDimensions = new SizeF(96, 96);
-        AutoScaleMode = AutoScaleMode.Dpi;
-        ResumeLayout(true);
     }
 }
