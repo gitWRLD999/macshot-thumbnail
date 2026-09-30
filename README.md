@@ -54,6 +54,10 @@ Settings are stored in `%LOCALAPPDATA%\MacShotThumbnail\settings.json`. Invalid 
 
 ## Screenshots
 
+![MacShot in action](docs/demos/macshot-demo.gif)
+
+[Watch the MP4 demo](docs/demos/macshot-demo.mp4). Recorded on a virtual SideScreen with sample content: capture banner, current-display capture, crop, Recycle Bin, dismiss, and settings. The sequence is scripted against the real application controls; it does not demonstrate keyboard shortcuts or live drag-and-drop. [Recording details](docs/demos/README.md).
+
 Real application controls captured with synthetic sample content and a generic destination, not personal files or accounts.
 
 ![Optional capture banner](docs/screenshots/banner.png)

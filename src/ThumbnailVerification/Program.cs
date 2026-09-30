@@ -8,6 +8,7 @@ internal static class Program
     {
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
+        if (args.Length == 4 && args[0] == "--demo-record") { DemoRecording.Run(args[1], args[2], args[3]); return; }
         if (args.Length == 1 && args[0] == "--recording-test") { AdvancedToolkitVerification.Run(Assembly.Load("MacShotThumbnail")); return; }
         if (args.Length >= 2 && args[0] == "--tool")
         {
