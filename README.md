@@ -54,9 +54,11 @@ Settings are stored in `%LOCALAPPDATA%\MacShotThumbnail\settings.json`. Invalid 
 
 ## Screenshots
 
-![MacShot in action](docs/demos/macshot-demo.gif)
+![Full-desktop capture and a real drag from the corner into Paint](docs/demos/macshot-desktop-drag.gif)
 
-[Watch the MP4 demo](docs/demos/macshot-demo.mp4). Recorded on a virtual SideScreen with sample content: capture banner, current-display capture, crop, Recycle Bin, dismiss, and settings. The sequence is scripted against the real application controls; it does not demonstrate keyboard shortcuts or live drag-and-drop. [Recording details](docs/demos/README.md).
+[Watch the full-desktop MP4 demo](docs/demos/macshot-desktop-drag.mp4): capture, drag the bottom-right preview into Microsoft Paint, and see the received image with the preview still available. Recorded on a clean Windows desktop with its wallpaper and taskbar visible. The transfer uses the native thumbnail's real Windows drag-and-drop, not clipboard paste or an inserted animation. [Recording details](docs/demos/README.md).
+
+[Additional feature walkthrough](docs/demos/macshot-demo.mp4) / [GIF](docs/demos/macshot-demo.gif): capture banner, crop, Recycle Bin, dismiss, and settings using scripted controls and sample content.
 
 Real application controls captured with synthetic sample content and a generic destination, not personal files or accounts.
 
