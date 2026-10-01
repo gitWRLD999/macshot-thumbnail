@@ -54,13 +54,13 @@ Settings are stored in `%LOCALAPPDATA%\MacShotThumbnail\settings.json`. Invalid 
 
 ## Screenshots
 
-![Full-desktop capture and a real drag from the corner into Paint](docs/demos/macshot-desktop-drag.gif)
+![Whole desktop and a real screenshot drag from the corner into Claude](docs/demos/macshot-claude-drag-v2.gif)
 
-[Watch the full-desktop MP4 demo](docs/demos/macshot-desktop-drag.mp4): capture, drag the bottom-right preview into Microsoft Paint, and see the received image with the preview still available. Recorded on a clean Windows desktop with its wallpaper and taskbar visible. The transfer uses the native thumbnail's real Windows drag-and-drop, not clipboard paste or an inserted animation. [Recording details](docs/demos/README.md).
+[Watch the full-desktop MP4 demo](docs/demos/macshot-claude-drag-v2.mp4): drag the bottom-right screenshot preview into Claude's composer and see a second image attach while the preview stays available. The whole Windows desktop, wallpaper and taskbar remain visible. This is the native thumbnail's real Windows drag-and-drop, not clipboard paste or an inserted animation. Personal identity is redacted and no message was sent. [Attached-image still](docs/demos/macshot-claude-attached.png) / [Recording details](docs/demos/README.md).
 
 [Additional feature walkthrough](docs/demos/macshot-demo.mp4) / [GIF](docs/demos/macshot-demo.gif): capture banner, crop, Recycle Bin, dismiss, and settings using scripted controls and sample content.
 
-Real application controls captured with synthetic sample content and a generic destination, not personal files or accounts.
+The additional walkthrough and settings images use synthetic sample content. The Claude demo uses a reviewed desktop screenshot and hides personal identity and chat history.
 
 ![Optional capture banner](docs/screenshots/banner.png)
 

@@ -6,11 +6,11 @@ internal static class LiveDesktopDemo
 {
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr window, int index, IntPtr value);
-    public static void Run(string output, string device)
+    public static void Run(string output, string device, string samplePath = null)
     {
         var screen = Screen.AllScreens.Single(s => s.DeviceName == device);
         Directory.CreateDirectory(output);
-        string path = Path.Combine(output, "desktop-drag-sample.png");
+        string path = Path.Combine(output, "macshot-demo.png");
         var assembly = Assembly.Load("MacShotThumbnail");
         var settingsType = assembly.GetType("MacShotThumbnail.Settings", true)!;
         var type = assembly.GetType("MacShotThumbnail.ThumbnailForm", true)!;
@@ -27,25 +27,50 @@ internal static class LiveDesktopDemo
             captureTimer.Stop();
             var engine = assembly.GetType("MacShotThumbnail.CaptureEngine", true)!;
             using var image = (Bitmap)engine.GetMethod("Capture", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)!.Invoke(null, [screen.Bounds, false])!;
-            image.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+            if (samplePath is null) image.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+            else
+            {
+                using var sample = new Bitmap(samplePath);
+                sample.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+            }
             var callbackType = typeof(Action<>).MakeGenericType(type);
             var callback = Expression.Lambda(callbackType, Expression.Empty(), Expression.Parameter(type)).Compile();
             preview = (Form)Activator.CreateInstance(type, path, callback, screen.WorkingArea, settings, null)!;
-            // A capture overlay clears on mouse-down before the real OLE drag begins.
+            // Restrict overlay hit testing during OLE, then restore normal thumbnail bounds.
+            // This avoids the color-key repaint flashes of a full-monitor transparent form.
             var location = preview.Location - (Size)screen.Bounds.Location;
+            var thumbnailBounds = new Rectangle(location, preview.Size);
             var imageBox = preview.Controls.OfType<PictureBox>().Single();
             imageBox.Dock = DockStyle.None;
             imageBox.Bounds = new Rectangle(location.X + 3, location.Y + 3, preview.Width - 6, preview.Height - 6);
             foreach (var button in preview.Controls.OfType<Button>()) button.Location += (Size)location;
             preview.Padding = Padding.Empty;
-            preview.BackColor = Color.Magenta;
+            typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(preview, true);
             var backdrop = new Bitmap(image); preview.BackgroundImage = backdrop;
+            bool overlayCleared = false;
             imageBox.MouseDown += (_, e) =>
             {
                 if (e.Button != MouseButtons.Left) return;
-                preview.BackgroundImage = null; preview.TransparencyKey = Color.Magenta;
-                preview.Refresh();
+                bool firstDrag = !overlayCleared;
+                if (firstDrag)
+                {
+                    overlayCleared = true;
+                    preview.BackgroundImage = null;
+                    preview.Region = new Region(thumbnailBounds);
+                }
+                // The window-scoped driver sends a very short gesture. Enter the existing
+                // native drag handler on press so OLE is ready before the pointer arrives.
+                typeof(Control).GetMethod("OnMouseMove", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(imageBox,
+                    [new MouseEventArgs(MouseButtons.Left, 0, e.X + SystemInformation.DragSize.Width, e.Y, 0)]);
+                if (firstDrag)
+                {
+                    foreach (Control control in preview.Controls) control.Location -= (Size)location;
+                    preview.Bounds = new Rectangle(screen.Bounds.Location + (Size)thumbnailBounds.Location, thumbnailBounds.Size);
+                    preview.Region = null;
+                }
             };
+            preview.GiveFeedback += (_, e) => Console.WriteLine($"OLE effect={e.Effect}");
+            preview.QueryContinueDrag += (_, e) => Console.WriteLine($"OLE action={e.Action}, keys={e.KeyState}");
             preview.Bounds = screen.Bounds;
             preview.ShowInTaskbar = true;
             preview.FormClosed += (_, _) => { backdrop.Dispose(); Application.ExitThread(); };
